@@ -1,13 +1,11 @@
 {
-	"localedir":"/usr/local/share/locale",
-	"shell-version": [
-		"3.20", "3.22", "3.24", "3.26"
-	],
-	"name": "CPU Power Manager",
-	"description": "Manage Intel_pstate CPU Frequency scaling driver",
-	"schema": "org.gnome.shell.extensions.cpupower",
-	"url": "https://github.com/martin31821/cpupower",
-	"uuid": "cpupower@mko-sl.de",
-    "gettext-domain": "cpupower",
-    "version": -1
+"localedir":"/usr/local/share/locale",
+"shell-version": ["3.18", "3.20", "3.22", "3.24", "3.26"],
+"name": "CPU Power Manager",
+"description": "Manage Intel_pstate CPU Frequency scaling driver",
+"schema": "org.gnome.shell.extensions.cpupower",
+"url": "https://github.com/martin31821/cpupower",
+"uuid": "cpupower@mko-sl.de",
+"gettext-domain": "gnome-shell-extension-cpupower",
+"version": -1
 }
