@@ -21,11 +21,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+[[ $EUID -eq 0 ]] || exec sudo /bin/bash "$(realpath "$0")" "$@"
+
 set -e
 
 log ()
 {
-    echo "$@" >&2 || true
+    echo -e "$@" >&2 || true
+}
+
+error ()
+{
+    log "error: $@" && exit 1
 }
 
 show_usage ()
@@ -57,6 +64,8 @@ help_arguments ()
 
 help_actions ()
 {
+	show_usage
+	log
     log "available actions:"
     log "    turbo        control or read the turbo boost state of your cpu"
     log "    min          get or set the minimum cpu frequency (in %, [0;100])"
@@ -67,6 +76,8 @@ help_actions ()
 
 help_turbo ()
 {
+    log "usage: cpufreqctl turbo {get,0,1}"
+	log
     log "turbo parameters:"
     log "    get          get the current turbo boost state"
     log "    0            turn turbo boost off"
@@ -76,20 +87,25 @@ help_turbo ()
 
 help_min ()
 {
+    log "usage: cpufreqctl min {get,check,VALUE}"
+	log
     log "min parameters:"
     log "    get          get the current set minimum frequency (in %, [0;100])"
-    log "    check        get the smallest allowed minimum frequency for your cpu model"
+    log "    check        get the smallest value allowed for minimum frequency (in %, [0;100])"
     log "    VALUE        set the current minimum frequency to a value in [0;100]"
-    log "                 the values is automatically clamped to the minimum allowed cpu"
+    log "                 the values are automatically clamped to the minimum allowed cpu"
     log "                 frequency"
     log
 }
 
 help_max ()
 {
+    log "usage: cpufreqctl max {get,check,VALUE}"
+	log
     log "max parameters:"
     log "    get          get the current set maximum frequency (in %, [0;100])"
-    log "    VALUE        set the current maximum frequency to a value in [0;100]"
+    log "    check        get the smallest value allowed for maximum frequency (in %, [0;100])"
+    log "    VALUE        set the current maximum frequency to a value [0;100]"
     log
 }
 
@@ -112,55 +128,81 @@ help_copyright ()
     log "cpufreqctl  Copyright (c) 2017  Martin Koppehel, Fin Christensen"
 }
 
-if [ $# -lt 1 ]
-then
-    show_usage
-    log "error: you must specify an action!"
-    exit
-fi
-
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+if [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ $# -lt 1 ]
 then
     show_help
     exit
 fi
 
+case "$1" in
+	turbo)
+		path="/sys/devices/system/cpu/intel_pstate/no_turbo"
+		read val < "$path"
+
+		case "$2" in
+			'')
+				help_turbo ;;
+			get)
+				echo $(( val ^ 1 )) ;;
+			0|1)
+				cat > "$path" <<<$(( $2 ^ 1 )) ;;
+			*)
+				error "you must specify a valid parameter!" ;;
+		esac
+		;;
+
+	min|max)
+		path="/sys/devices/system/cpu/intel_pstate/$1_perf_pct"
+		read val < "$path"
+
+		case "$2" in
+			'')
+				eval help_$1 ;;
+			get)
+				echo "$val" ;;
+			check)
+				cat "$path" <(echo 0 > "$path")
+				echo "$val" > "$path" ;;
+			*[0-9]*)
+				if test "$2" -lt 0 || test "$2" -gt 100
+				then
+					error "VALUE must be between 0 and 100"
+				fi
+				cat > "$path" <<<$2 ;;
+			*)
+				error "you must specify a valid parameter!" ;;
+		esac
+		;;
+
+	*)
+		help_actions
+		error "you must specify a valid action!" ;;
+esac
+
+exit
+
 if [ "$1" = "turbo" ]
 then
     if [ -z "$2" ]
-    then
-        log "usage: cpufreqctl turbo {get,0,1}"
-        log
+	then
+        log "usage: cpufreqctl turbo {get,0,1}\n"
         help_turbo
         help_copyright
-        exit
-    fi
-
-    if [ "$2" = "get" ]
-    then
-	value=$(<"/sys/devices/system/cpu/intel_pstate/no_turbo")
-	if [ "${value}" -eq 0 ]
-	then
-	    echo 1
 	else
-	    echo 0
+		case "$2" in
+		get)
+			value=$(</sys/devices/system/cpu/intel_pstate/no_turbo)
+			[ "${value}" -eq 0 ] && echo 1 || echo 0 ;;
+		0)
+			echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo ;;
+		1)
+			echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo ;;
+		*)
+			log "usage: cpufreqctl turbo {get,0,1}"
+			log "error: VALUE must be 0 or 1"
+			;;
+		esac
 	fi
-	exit
-    fi
-    if [ "$2" -lt 0 ] || [ "$2" -gt 1 ];
-    then
-        log "usage: cpufreqctl turbo {get,0,1}"
-	log "error: VALUE must be 0 or 1"
-	exit
-    fi
-
-    if [ "$2" -eq 1 ]
-    then
-	echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo
-    else
-	echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
-    fi
-    exit
 fi
 
 if [ "$1" = "max" ]
